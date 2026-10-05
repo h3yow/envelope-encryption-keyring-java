@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.CiphertextEnvelope;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.EnvelopeCipher;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.KeyRing;
+import com.github.h3yow.envelopeencryptionkeyringjava.crypto.KeyRingProtection;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.MasterKeyService;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.RewrapService;
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.ContextMismatchException;
@@ -38,7 +39,7 @@ class RewrapServiceTest {
 
     @BeforeEach
     void setUp() {
-        keyRing = new KeyRing(dir.resolve("keyring.json").toString());
+        keyRing = new KeyRing(dir.resolve("keyring.json").toString(), KeyRingProtection.fromRootKey("test-root-key"));
         admin = new MasterKeyService(keyRing, ADMIN, false);
         admin.ensureInitialized();
         cipher = new EnvelopeCipher(keyRing);

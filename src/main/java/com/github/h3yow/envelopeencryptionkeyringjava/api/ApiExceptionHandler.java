@@ -5,6 +5,7 @@ import com.github.h3yow.envelopeencryptionkeyringjava.errors.ContextMismatchExce
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.CryptoServiceException;
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.KeyDisabledException;
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.MalformedCiphertextException;
+import com.github.h3yow.envelopeencryptionkeyringjava.errors.MigrationConflictException;
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.UnauthorizedOperationException;
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.UnknownKeyVersionException;
 import java.util.Map;
@@ -23,7 +24,8 @@ public class ApiExceptionHandler {
             KeyDisabledException.class, HttpStatus.UNPROCESSABLE_ENTITY,
             MalformedCiphertextException.class, HttpStatus.BAD_REQUEST,
             CiphertextIntegrityException.class, HttpStatus.UNPROCESSABLE_ENTITY,
-            ContextMismatchException.class, HttpStatus.UNPROCESSABLE_ENTITY);
+            ContextMismatchException.class, HttpStatus.UNPROCESSABLE_ENTITY,
+            MigrationConflictException.class, HttpStatus.CONFLICT);
 
     public record ErrorBody(String code, String message) {
     }
@@ -34,5 +36,12 @@ public class ApiExceptionHandler {
         String code = ex.getClass().getSimpleName().replace("Exception", "")
                 .replaceAll("(?<=[a-z])(?=[A-Z])", "_").toUpperCase();
         return ResponseEntity.status(status).body(new ErrorBody(code, ex.getMessage()));
+    }
+
+    /** 请求参数缺失/非法（如 requestId 为空）→ 400。 */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorBody> handleBadRequest(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorBody("BAD_REQUEST", ex.getMessage()));
     }
 }

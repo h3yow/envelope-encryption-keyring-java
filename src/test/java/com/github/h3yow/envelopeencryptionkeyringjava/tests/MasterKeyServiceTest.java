@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.KeyRing;
+import com.github.h3yow.envelopeencryptionkeyringjava.crypto.KeyRingProtection;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.KeyStatus;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.MasterKey;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.MasterKeyService;
@@ -30,7 +31,7 @@ class MasterKeyServiceTest {
 
     @BeforeEach
     void setUp() {
-        keyRing = new KeyRing(dir.resolve("keyring.json").toString());
+        keyRing = new KeyRing(dir.resolve("keyring.json").toString(), KeyRingProtection.fromRootKey("test-root-key"));
         service = new MasterKeyService(keyRing, ADMIN, false);
     }
 
@@ -87,7 +88,7 @@ class MasterKeyServiceTest {
         MasterKey k1 = service.ensureInitialized();
         MasterKey k2 = service.rotate(ADMIN);
         service.disable(ADMIN, k1.getVersion());
-        KeyRing reloaded = new KeyRing(dir.resolve("keyring.json").toString());
+        KeyRing reloaded = new KeyRing(dir.resolve("keyring.json").toString(), KeyRingProtection.fromRootKey("test-root-key"));
         log.info("reload highestVersion={} size={}", reloaded.highestVersion(), reloaded.size());
         assertEquals(k2.getVersion(), reloaded.activeKey().orElseThrow().getVersion());
         assertEquals(KeyStatus.DISABLED, reloaded.find(k1.getVersion()).orElseThrow().getStatus());

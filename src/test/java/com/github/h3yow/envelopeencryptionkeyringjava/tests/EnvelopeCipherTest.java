@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.CiphertextEnvelope;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.EnvelopeCipher;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.KeyRing;
+import com.github.h3yow.envelopeencryptionkeyringjava.crypto.KeyRingProtection;
 import com.github.h3yow.envelopeencryptionkeyringjava.crypto.MasterKeyService;
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.CiphertextIntegrityException;
 import com.github.h3yow.envelopeencryptionkeyringjava.errors.ContextMismatchException;
@@ -42,7 +43,7 @@ class EnvelopeCipherTest {
 
     @BeforeEach
     void setUp() {
-        keyRing = new KeyRing(dir.resolve("keyring.json").toString());
+        keyRing = new KeyRing(dir.resolve("keyring.json").toString(), KeyRingProtection.fromRootKey("test-root-key"));
         MasterKeyService admin = new MasterKeyService(keyRing, "tok", false);
         admin.ensureInitialized();
         cipher = new EnvelopeCipher(keyRing);

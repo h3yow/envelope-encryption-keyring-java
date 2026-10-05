@@ -39,6 +39,9 @@ class ApiIntegrationTest {
     static void props(DynamicPropertyRegistry registry) {
         registry.add("keyring.storage-path", () -> sharedDir.resolve("keyring.json").toString());
         registry.add("keyring.admin-token", () -> ADMIN);
+        registry.add("keyring.root-key", () -> "it-root-key");
+        registry.add("keyring.migration-records-path",
+                () -> sharedDir.resolve("migration-records.json").toString());
     }
 
     @LocalServerPort
@@ -99,17 +102,27 @@ class ApiIntegrationTest {
         log.info("rest rotated newVersion={}", newVersion);
 
         ResponseEntity<Map> rw1 = rest.postForEntity(url("/api/migration/rewrap"),
-                Map.of("context", CTX, "envelope", envelope), Map.class);
+                Map.of("requestId", "it-req-1", "context", CTX, "envelope", envelope), Map.class);
         assertEquals(HttpStatus.OK, rw1.getStatusCode());
         assertEquals(Boolean.TRUE, rw1.getBody().get("migrated"));
+        assertEquals(Boolean.FALSE, rw1.getBody().get("replayed"));
         String migrated = (String) rw1.getBody().get("envelope");
 
+        // 同一请求编号 + 相同输入 → 重放，密文与首次完全一致
         ResponseEntity<Map> rw2 = rest.postForEntity(url("/api/migration/rewrap"),
-                Map.of("context", CTX, "envelope", migrated), Map.class);
-        log.info("rest rewrap migrated1={} migrated2={}",
-                rw1.getBody().get("migrated"), rw2.getBody().get("migrated"));
-        assertEquals(Boolean.FALSE, rw2.getBody().get("migrated"), "重复迁移必须幂等");
+                Map.of("requestId", "it-req-1", "context", CTX, "envelope", envelope), Map.class);
+        log.info("rest rewrap migrated1={} replayed2={}",
+                rw1.getBody().get("migrated"), rw2.getBody().get("replayed"));
+        assertEquals(Boolean.TRUE, rw2.getBody().get("replayed"), "同号同输入必须重放");
         assertEquals(migrated, rw2.getBody().get("envelope"));
+
+        // 同一请求编号 + 不同输入 → 409 MIGRATION_CONFLICT，与其它失败可区分
+        ResponseEntity<Map> conflict = rest.postForEntity(url("/api/migration/rewrap"),
+                Map.of("requestId", "it-req-1", "context", CTX, "envelope", migrated), Map.class);
+        log.info("rest conflict status={} code={}", conflict.getStatusCode(),
+                conflict.getBody().get("code"));
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals("MIGRATION_CONFLICT", conflict.getBody().get("code"));
 
         // 6. 迁移后的密文经 REST 解密仍得到原明文
         ResponseEntity<Map> dec2 = rest.postForEntity(url("/api/crypto/decrypt"),
