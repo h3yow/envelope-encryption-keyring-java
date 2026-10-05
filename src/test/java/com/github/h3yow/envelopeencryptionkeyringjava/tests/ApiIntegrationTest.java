@@ -39,6 +39,9 @@ class ApiIntegrationTest {
     static void props(DynamicPropertyRegistry registry) {
         registry.add("keyring.storage-path", () -> sharedDir.resolve("keyring.json").toString());
         registry.add("keyring.admin-token", () -> ADMIN);
+        registry.add("keyring.root-password", () -> "it-root-password");
+        registry.add("keyring.migration-store-path",
+                () -> sharedDir.resolve("migration-requests.json").toString());
     }
 
     @LocalServerPort
@@ -89,7 +92,7 @@ class ApiIntegrationTest {
         assertEquals("UNAUTHORIZED_OPERATION", forbidden.getBody().get("code"));
         assertTrue(!forbidden.getBody().toString().contains(ADMIN), "不得泄露令牌或密钥材料");
 
-        // 5. 授权轮换 → 重包裹 → 幂等
+        // 5. 授权轮换 → 按 requestId 重包裹 → 同号重放，密文一致
         HttpHeaders good = new HttpHeaders();
         good.set("X-Admin-Token", ADMIN);
         ResponseEntity<Map> rotated = rest.exchange(url("/api/admin/keys/rotate"),
@@ -99,21 +102,33 @@ class ApiIntegrationTest {
         log.info("rest rotated newVersion={}", newVersion);
 
         ResponseEntity<Map> rw1 = rest.postForEntity(url("/api/migration/rewrap"),
-                Map.of("context", CTX, "envelope", envelope), Map.class);
+                Map.of("requestId", "req-001", "context", CTX, "envelope", envelope), Map.class);
         assertEquals(HttpStatus.OK, rw1.getStatusCode());
         assertEquals(Boolean.TRUE, rw1.getBody().get("migrated"));
+        assertEquals(Boolean.FALSE, rw1.getBody().get("replay"), "首次提交必须是真实迁移");
         String migrated = (String) rw1.getBody().get("envelope");
 
         ResponseEntity<Map> rw2 = rest.postForEntity(url("/api/migration/rewrap"),
-                Map.of("context", CTX, "envelope", migrated), Map.class);
-        log.info("rest rewrap migrated1={} migrated2={}",
-                rw1.getBody().get("migrated"), rw2.getBody().get("migrated"));
-        assertEquals(Boolean.FALSE, rw2.getBody().get("migrated"), "重复迁移必须幂等");
-        assertEquals(migrated, rw2.getBody().get("envelope"));
+                Map.of("requestId", "req-001", "context", CTX, "envelope", envelope), Map.class);
+        log.info("rest rewrap migrated1={} replay2={}",
+                rw1.getBody().get("migrated"), rw2.getBody().get("replay"));
+        assertEquals(Boolean.TRUE, rw2.getBody().get("replay"), "同编号重复提交必须是重放");
+        assertEquals(Boolean.TRUE, rw2.getBody().get("migrated"), "重放返回首次的迁移结论");
+        assertEquals(migrated, rw2.getBody().get("envelope"), "重放必须返回与首次一致的密文");
+
+        // 同编号不同内容 → 409 IDEMPOTENCY_CONFLICT，与损坏/版本错误区分
+        ResponseEntity<Map> conflict = rest.postForEntity(url("/api/migration/rewrap"),
+                Map.of("requestId", "req-001", "context", "tenant=other", "envelope", envelope),
+                Map.class);
+        log.info("rest conflict status={} code={}", conflict.getStatusCode(),
+                conflict.getBody().get("code"));
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals("IDEMPOTENCY_CONFLICT", conflict.getBody().get("code"));
 
         // 6. 迁移后的密文经 REST 解密仍得到原明文
         ResponseEntity<Map> dec2 = rest.postForEntity(url("/api/crypto/decrypt"),
                 Map.of("context", CTX, "envelope", migrated), Map.class);
+        assertEquals(HttpStatus.OK, dec2.getStatusCode());
         assertEquals(plaintextB64, dec2.getBody().get("plaintextBase64"));
 
         // 7. 结构不完整密文 → 400 MALFORMED_CIPHERTEXT

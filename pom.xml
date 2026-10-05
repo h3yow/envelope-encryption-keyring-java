@@ -35,6 +35,17 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 让覆盖场景的审计日志直接出现在控制台 -->
+                    <redirectTestOutputToFile>false</redirectTestOutputToFile>
+                    <!-- 每类独立 JVM：避免某个测试启动/失败的 Spring 上下文影响其它测试的日志初始化 -->
+                    <forkCount>1</forkCount>
+                    <reuseForks>false</reuseForks>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
